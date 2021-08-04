@@ -1,3 +1,15 @@
+# Alexis's FSR Branch
+## Why?
+Well it's 2021, I'm not very well going to keep my modifications on a floppy disk. The intention was to make the FSR branch support both additional sensors (to fit what I believe is an old DDR Game PS2 pad) and have native support for buttons & joystick on an Arduino Micro. 
+## Changes
+- Added [Arduino Joystick Library](https://github.com/MHeironimus/ArduinoJoystickLibrary) to have Joystick support even on non-Teensy platforms
+- Added a Button object that can tie into digital inputs (such as arcade buttons, for Start & Select)
+- Added additional serial console options, for local debugging
+- Expanded Sensor class with name to make logging easier to follow
+- Expanded React page & Python server to support 8 sensors
+## What's next?
+Right now this went from being hardcoded to 4 sensors to being hardcoded to 8. I'd like to expand this to make the UI more flexible and adjust based off an API call. The Arduino seems like it'll always be the bottle neck, but it might be possible to make that flexible enough for someone to just edit a few parameters and get it working for their own setup.
+
 # Teejusb's FSR Guide
 A complete software package for FSR dance pads.  
 Join the [discord](https://discord.gg/RamvtwuEF2) for any questions/suggestions
@@ -73,3 +85,15 @@ cd C:\Users\YourUser\path\to\fsr\webui
 yarn start-api
 ```
 Now you can just click on that file to open the UI and start the server.
+
+UL on A4 and 4? (0 sense....)
+DL pin A3
+DR pin A1
+UR pin 6?
+UP not working
+RIGHT not working
+LEFT not working
+DOWN pin A2
+
+Resolder yellow sensor wire
+Unscrew & check (broken) sensors 1 by 1 first

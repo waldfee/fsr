@@ -23,12 +23,12 @@ import {
 
 // Keep track of the current thresholds fetched from the backend.
 // Make it global since it's used by many components.
-let kCurThresholds = [0, 0, 0, 0];
+let kCurThresholds = [0, 0, 0, 0, 0, 0, 0, 0];
 
 // A history of the past 'max_size' values fetched from the backend.
 // Used for plotting and displaying live values.
 // We use a cyclical array to save memory.
-let kCurValues = [[0, 0, 0, 0]]
+let kCurValues = [[0, 0, 0, 0, 0, 0, 0, 0]]
 const max_size = 1000;
 let oldest = 0;
 
@@ -55,6 +55,7 @@ function connect() {
   });
 
   ws.addEventListener('message', function(ev) {
+    console.log(ev.data);
     const data = JSON.parse(ev.data)
     const action = data[0];
     const msg = data[1];
@@ -77,6 +78,7 @@ function emit(msg) {
 }
 
 wsCallbacks.values = function(msg) {
+  console.log(msg);
   if (kCurValues.length < max_size) {
     kCurValues.push(msg.values);
   } else {
@@ -98,6 +100,7 @@ function ValueMonitor(props) {
   const thresholdLabelRef = React.useRef(null);
   const valueLabelRef = React.useRef(null);
   const canvasRef = React.useRef(null);
+  const nameRef = props.name;
 
   function EmitValue(val) {
     // Send back all the thresholds instead of a single value per sensor. This is in case
@@ -246,7 +249,7 @@ function ValueMonitor(props) {
       grd.addColorStop(0, 'orange');
       grd.addColorStop(1, 'red');
       ctx.fillStyle = grd;
-      ctx.fillRect(canvas.width/4, position, canvas.width/2, canvas.height);
+      ctx.fillRect(canvas.width/8, position, canvas.width/2, canvas.height);
 
       // Threshold Line
       const threshold_height = 3
@@ -263,6 +266,7 @@ function ValueMonitor(props) {
       } else {
         ctx.textBaseline = 'bottom';
       }
+
       ctx.fillText(kCurThresholds[index].toString(), 0, threshold_pos + threshold_height + 1);
 
       requestId = requestAnimationFrame(render);
@@ -282,6 +286,8 @@ function ValueMonitor(props) {
 
   return(
     <Col style={{height: '75vh', paddingTop: '1vh'}}>
+      {nameRef}
+      <br />
       <Button variant="light" size="sm" onClick={Decrement}><b>-</b></Button>
       <span> </span>
       <Button variant="light" size="sm" onClick={Increment}><b>+</b></Button>
@@ -301,10 +307,14 @@ function WebUI() {
     <header className="App-header">
       <Container fluid style={{border: '1px solid white', height: '100vh'}}>
         <Row>
-          <ValueMonitor index="0"/>
-          <ValueMonitor index="1"/>
-          <ValueMonitor index="2"/>
-          <ValueMonitor index="3"/>
+          <ValueMonitor index="0" name="&#11013;"/>
+          <ValueMonitor index="1" name="&#11014;"/>
+          <ValueMonitor index="2" name="&#11015;"/>
+          <ValueMonitor index="3" name="&#10145;"/>
+          <ValueMonitor index="4" name="&#8598;"/>
+          <ValueMonitor index="5" name="&#8601;"/>
+          <ValueMonitor index="6" name="&#8599;"/>
+          <ValueMonitor index="7" name="&#8600;"/>
         </Row>
       </Container>
     </header>
@@ -380,7 +390,7 @@ function Plot() {
 
       // Plot the line graph for each of the sensors.
       const px_per_div = box_width/max_size;
-      for (let i = 0; i < 4; ++i) {
+      for (let i = 0; i < 8; ++i) {
         if (display[i]) {
           ctx.beginPath();
           ctx.setLineDash([]);
@@ -401,7 +411,7 @@ function Plot() {
       }
 
       // Display the current thresholds.
-      for (let i = 0; i < 4; ++i) {
+      for (let i = 0; i < 8; ++i) {
         if (display[i]) {
           ctx.beginPath();
           ctx.setLineDash([]);
@@ -415,7 +425,7 @@ function Plot() {
 
       // Display the current value for each of the sensors.
       ctx.font = "30px " + bodyFontFamily;
-      for (let i = 0; i < 4; ++i) {
+      for (let i = 0; i < 8; ++i) {
         if (display[i]) {
           ctx.fillStyle = colors[i];
           if (kCurValues.length < max_size) {
@@ -461,6 +471,22 @@ function Plot() {
             </Button>
             <span> </span>
             <Button variant="light" size="sm" onClick={() => ToggleLine(3)}>
+              <b style={{color: colors[3]}}>Right</b>
+            </Button>
+            <span> </span>
+            <Button variant="light" size="sm" onClick={() => ToggleLine(4)}>
+              <b style={{color: colors[3]}}>Right</b>
+            </Button>
+            <span> </span>
+            <Button variant="light" size="sm" onClick={() => ToggleLine(5)}>
+              <b style={{color: colors[3]}}>Right</b>
+            </Button>
+            <span> </span>
+            <Button variant="light" size="sm" onClick={() => ToggleLine(6)}>
+              <b style={{color: colors[3]}}>Right</b>
+            </Button>
+            <span> </span>
+            <Button variant="light" size="sm" onClick={() => ToggleLine(7)}>
               <b style={{color: colors[3]}}>Right</b>
             </Button>
           </Col>
