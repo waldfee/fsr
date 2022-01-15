@@ -5,6 +5,25 @@
   #define CAN_AVERAGE
 #endif
 
+// Default debounce for buttons.
+const long kDebounceDelay = 50;
+// Default threshold value for each of the sensors.
+const int16_t kDefaultThreshold = 1000;
+// Max window size for both of the moving averages classes.
+const size_t kWindowSize = 50;
+// Baud rate used for Serial communication. Technically ignored by Teensys.
+const long kBaudRate = 115200;
+// Max number of sensors per panel.
+// NOTE(teejusb): This is arbitrary, if you need to support more sensors
+// per panel then just change the following number.
+const size_t kMaxSharedSensors = 2;
+// Maximum number of buttons on the joystick
+// NOTE(alsalkeld): This is also arbitrary. You can bump this up if you have
+// additional inputs, it just make the joystick gamepad window neater if they match.
+uint8_t kMaxJoystickButtons = 10;
+// Automatically incremented when creating a new button or sensor.
+uint8_t curButtonNum = 0;
+
 #if defined(_SFR_BYTE) && defined(_BV) && defined(ADCSRA)
   #define CLEAR_BIT(sfr, bit) (_SFR_BYTE(sfr) &= ~_BV(bit))
   #define SET_BIT(sfr, bit) (_SFR_BYTE(sfr) |= _BV(bit))
@@ -27,32 +46,27 @@
     Joystick.button(button_num, 0);
   }
 #else
-  #include <Keyboard.h>
-  // And the Keyboard library for Arduino
+  #include <Joystick.h> //https://github.com/MHeironimus/ArduinoJoystickLibrary
+  // And the Joystick library for Arduino
+  
+  // Create the Joystick
+  Joystick_ Joystick(JOYSTICK_DEFAULT_REPORT_ID,JOYSTICK_TYPE_GAMEPAD,
+    kMaxJoystickButtons, 0, // Button Count, Hat Switch Count
+    false, false, false,   // No X, Y or Z Axis
+    false, false, false,   // No Rx, Ry, or Rz
+    false, false,          // No rudder or throttle
+    false, false, false);  // No accelerator, brake, or steering
+
   void ButtonStart() {
-    Keyboard.begin();
+    Joystick.begin(false);
   }
   void ButtonPress(uint8_t button_num) {
-    Keyboard.press('a' + button_num - 1);
+    Joystick.pressButton(button_num);
   }
   void ButtonRelease(uint8_t button_num) {
-    Keyboard.release('a' + button_num - 1);
+    Joystick.releaseButton(button_num);
   }
 #endif
-
-// Default threshold value for each of the sensors.
-const int16_t kDefaultThreshold = 1000;
-// Max window size for both of the moving averages classes.
-const size_t kWindowSize = 50;
-// Baud rate used for Serial communication. Technically ignored by Teensys.
-const long kBaudRate = 115200;
-// Max number of sensors per panel.
-// NOTE(teejusb): This is arbitrary, if you need to support more sensors
-// per panel then just change the following number.
-const size_t kMaxSharedSensors = 2;
-// Button numbers should start with 1 (Button0 is not a valid Joystick input).
-// Automatically incremented when creating a new SensorState.
-uint8_t curButtonNum = 1;
 
 /*===========================================================================*/
 
@@ -293,8 +307,9 @@ class SensorState {
 // Class containing all relevant information per sensor.
 class Sensor {
  public:
-  Sensor(uint8_t pin_value, SensorState* sensor_state = nullptr)
+  Sensor(uint8_t pin_value, String button_name, SensorState* sensor_state = nullptr)
       : initialized_(false), pin_value_(pin_value),
+        button_name_(button_name),
         user_threshold_(kDefaultThreshold),
         #if defined(CAN_AVERAGE)
           moving_average_(kWindowSize),
@@ -380,6 +395,14 @@ class Sensor {
     return cur_value_;
   }
 
+  int16_t GetPin() {
+    return pin_value_;
+  }
+
+  String GetButtonName() {
+    return button_name_;
+  }
+
   int16_t GetThreshold() {
     return user_threshold_;
   }
@@ -392,6 +415,9 @@ class Sensor {
   bool initialized_;
   // The pin on the Teensy/Arduino corresponding to this sensor.
   uint8_t pin_value_;
+
+  // The arrow this corresponds to, for debugging.
+  String button_name_;
 
   // The user defined threshold value to activate/deactivate this sensor at.
   int16_t user_threshold_;
@@ -419,6 +445,100 @@ class Sensor {
 
 /*===========================================================================*/
 
+// Class containing all relevant information per sensor.
+class Button {
+ public:
+  Button(uint8_t pin_value, String button_name)
+      : initialized_(false), pin_value_(pin_value),
+        button_name_(button_name),
+        debounce_delay_(kDebounceDelay),
+        kButtonNum(curButtonNum++) {}
+
+  void Init(uint8_t button_id) {
+    // Sensor should only be initialized once.
+    if (initialized_) {
+      return;
+    }
+    // Sensor IDs should be 1-indexed thus they must be non-zero.
+    if (button_id == 0) {
+      return;
+    }
+
+    //Initalize pin for digital button presses with internal pullup resistor
+    pinMode(pin_value_, INPUT_PULLUP);
+
+    button_id_ = button_id;
+    initialized_ = true;
+  }
+
+  // Fetches the sensor value and maybe triggers the button press/release.
+  void EvaluateButton(bool willSend) {
+    if (!initialized_) {
+      return;
+    }
+
+    if ((millis() - lastDebounceTime) > debounce_delay_)
+    {
+      lastDebounceTime = millis();
+      cur_value_ = digitalRead(pin_value_);
+    }
+    
+    if (willSend) {
+      switch (cur_value_) {
+        case LOW:
+          ButtonPress(kButtonNum);
+          break;
+        case HIGH:
+          ButtonRelease(kButtonNum);
+          break;
+      }
+    }
+  }
+
+  int16_t GetCurValue() {
+    return cur_value_;
+  }
+
+  int16_t GetPin() {
+    return pin_value_;
+  }
+
+  String GetButtonName() {
+    return button_name_;
+  }
+
+  // Delete default constructor. Pin number MUST be explicitly specified.
+  Button() = delete;
+ 
+  private:
+  // Ensures that Init() has been called at exactly once on this Sensor.
+  bool initialized_;
+  
+  // The pin on the Teensy/Arduino corresponding to this sensor.
+  uint8_t pin_value_;
+
+  // The arrow this corresponds to, for debugging.
+  String button_name_;
+
+  // The user defined threshold value to activate/deactivate this sensor at.
+  long debounce_delay_;
+  
+  // The last time this pin was read as high
+  long lastDebounceTime = 0;
+
+  // The latest value obtained for this sensor.
+  uint8_t cur_value_;
+
+  // A unique number corresponding to this sensor. Set during Init().
+  uint8_t button_id_;
+
+  // The button number this button corresponds to.
+  const uint8_t kButtonNum;
+};
+
+
+/*===========================================================================*/
+
 // Defines the sensor collections and sets the pins for them appropriately.
 //
 // If you want to use multiple sensors in one panel, you will want to share
@@ -436,11 +556,63 @@ class Sensor {
 //   Sensor(A4),
 // };
 
+Button kButtons[] = {
+  Button(7, "Start"),
+  Button(8, "Select"),
+};
+const size_t kNumButtons = sizeof(kButtons)/sizeof(Button);
+
+/*===========================================================================*/
+
+// Defines the sensor collections and sets the pins for them appropriately.
+//
+// If you want to use multiple sensors in one panel, you will want to share
+// state across them. In the following example, the first and second sensors
+// share state. The maximum number of sensors that can be shared for one panel
+// is controlled by the kMaxSharedSensors constant at the top of this file, but
+// can be modified as needed.
+//
+// SensorState state1;
+// Sensor kSensors[] = {
+//   Sensor(A0, &state1),
+//   Sensor(A1, &state1),
+//   Sensor(A2),
+//   Sensor(A3),
+//   Sensor(A4),
+// };
+
+  String pinMaps[19] =
+  {
+    "Start",
+    "Select",
+    "9",
+    "10",
+    "11",
+    "12",
+    "13",
+    "14",
+    "15",
+    "16",
+    "17",
+    "Right",
+    "Down-Right",
+    "Down",
+    "Down-Left",
+    "Up-Left",
+    "Left",
+    "Up-Right",
+    "Up",
+  };
+
 Sensor kSensors[] = {
-  Sensor(A0),
-  Sensor(A1),
-  Sensor(A2),
-  Sensor(A3),
+  Sensor(A5, "Left"),
+  Sensor(A2, "Down"),
+  Sensor(A7, "Up"), 
+  Sensor(A0, "Right"),
+  Sensor(A4, "Up-Left"),
+  Sensor(A3, "Down-Left"),
+  Sensor(A6, "Up-Right"),
+  Sensor(A1, "Down-Right"),
 };
 const size_t kNumSensors = sizeof(kSensors)/sizeof(Sensor);
 
@@ -465,6 +637,10 @@ class SerialProcessor {
         case 'O':
           UpdateOffsets();
           break;
+        case 'r':
+        case 'R':
+          PrintReadableValues();
+          break;
         case 'v':
         case 'V':
           PrintValues();
@@ -472,6 +648,9 @@ class SerialProcessor {
         case 't':
         case 'T':
           PrintThresholds();
+        case 'h':
+        case 'H':
+          PrintReadableThresholds();
           break;
         default:
           UpdateAndPrintThreshold(bytes_read);
@@ -509,6 +688,34 @@ class SerialProcessor {
     for (size_t i = 0; i < kNumSensors; ++i) {
       Serial.print(" ");
       Serial.print(kSensors[i].GetCurValue());
+    }
+    Serial.print("\n");
+  }
+
+  void PrintReadableValues() {
+    Serial.print("r");
+    for (size_t i = 0; i < kNumSensors; ++i) {
+      Serial.print(" ");
+      Serial.print(kSensors[i].GetButtonName());
+      Serial.print(":");
+      Serial.print(kSensors[i].GetCurValue());
+    }
+    for (size_t i = 0; i < kNumButtons; ++i) {
+      Serial.print(" ");
+      Serial.print(pinMaps[kButtons[i].GetPin()-7]);
+      Serial.print(":");
+      Serial.print(kButtons[i].GetCurValue());
+    }
+    Serial.print("\n");
+  }
+
+  void PrintReadableThresholds() {
+    Serial.print("h");
+    for (size_t i = 0; i < kNumSensors; ++i) {
+      Serial.print(" ");
+      Serial.print(kSensors[i].GetButtonName());
+      Serial.print(":");
+      Serial.print(kSensors[i].GetThreshold());
     }
     Serial.print("\n");
   }
@@ -553,6 +760,11 @@ void setup() {
 	  CLEAR_BIT(ADCSRA, ADPS1);
 	  CLEAR_BIT(ADCSRA, ADPS0);
   #endif
+
+  for (size_t i = 0; i < kNumButtons; ++i) {
+    // Button numbers should start with 1.
+    kButtons[i].Init(i + 1);
+  }
 }
 
 void loop() {
@@ -572,11 +784,18 @@ void loop() {
     kSensors[i].EvaluateSensor(willSend);
   }
 
+  for (size_t i = 0; i < kNumButtons; ++i) {
+    kButtons[i].EvaluateButton(willSend);
+  }
+
   if (willSend) {
     lastSend = startMicros;
     #ifdef CORE_TEENSY
         Joystick.send_now();
+    #else
+      Joystick.sendState();
     #endif
+    
   }
 
   if (loopTime == -1) {
