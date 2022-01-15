@@ -307,9 +307,8 @@ class SensorState {
 // Class containing all relevant information per sensor.
 class Sensor {
  public:
-  Sensor(uint8_t pin_value, String button_name, SensorState* sensor_state = nullptr)
+  Sensor(uint8_t pin_value, SensorState* sensor_state = nullptr)
       : initialized_(false), pin_value_(pin_value),
-        button_name_(button_name),
         user_threshold_(kDefaultThreshold),
         #if defined(CAN_AVERAGE)
           moving_average_(kWindowSize),
@@ -399,10 +398,6 @@ class Sensor {
     return pin_value_;
   }
 
-  String GetButtonName() {
-    return button_name_;
-  }
-
   int16_t GetThreshold() {
     return user_threshold_;
   }
@@ -415,9 +410,6 @@ class Sensor {
   bool initialized_;
   // The pin on the Teensy/Arduino corresponding to this sensor.
   uint8_t pin_value_;
-
-  // The arrow this corresponds to, for debugging.
-  String button_name_;
 
   // The user defined threshold value to activate/deactivate this sensor at.
   int16_t user_threshold_;
@@ -448,9 +440,8 @@ class Sensor {
 // Class containing all relevant information per sensor.
 class Button {
  public:
-  Button(uint8_t pin_value, String button_name)
+  Button(uint8_t pin_value)
       : initialized_(false), pin_value_(pin_value),
-        button_name_(button_name),
         debounce_delay_(kDebounceDelay),
         kButtonNum(curButtonNum++) {}
 
@@ -486,10 +477,10 @@ class Button {
     if (willSend) {
       switch (cur_value_) {
         case LOW:
-          ButtonPress(kButtonNum);
+          ButtonPress(button_id_);
           break;
         case HIGH:
-          ButtonRelease(kButtonNum);
+          ButtonRelease(button_id_);
           break;
       }
     }
@@ -503,10 +494,6 @@ class Button {
     return pin_value_;
   }
 
-  String GetButtonName() {
-    return button_name_;
-  }
-
   // Delete default constructor. Pin number MUST be explicitly specified.
   Button() = delete;
  
@@ -516,9 +503,6 @@ class Button {
   
   // The pin on the Teensy/Arduino corresponding to this sensor.
   uint8_t pin_value_;
-
-  // The arrow this corresponds to, for debugging.
-  String button_name_;
 
   // The user defined threshold value to activate/deactivate this sensor at.
   long debounce_delay_;
@@ -538,27 +522,9 @@ class Button {
 
 
 /*===========================================================================*/
-
-// Defines the sensor collections and sets the pins for them appropriately.
-//
-// If you want to use multiple sensors in one panel, you will want to share
-// state across them. In the following example, the first and second sensors
-// share state. The maximum number of sensors that can be shared for one panel
-// is controlled by the kMaxSharedSensors constant at the top of this file, but
-// can be modified as needed.
-//
-// SensorState state1;
-// Sensor kSensors[] = {
-//   Sensor(A0, &state1),
-//   Sensor(A1, &state1),
-//   Sensor(A2),
-//   Sensor(A3),
-//   Sensor(A4),
-// };
-
 Button kButtons[] = {
-  Button(7, "Start"),
-  Button(8, "Select"),
+  Button(21),
+  Button(22),
 };
 const size_t kNumButtons = sizeof(kButtons)/sizeof(Button);
 
@@ -581,38 +547,11 @@ const size_t kNumButtons = sizeof(kButtons)/sizeof(Button);
 //   Sensor(A4),
 // };
 
-  String pinMaps[19] =
-  {
-    "Start",
-    "Select",
-    "9",
-    "10",
-    "11",
-    "12",
-    "13",
-    "14",
-    "15",
-    "16",
-    "17",
-    "Right",
-    "Down-Right",
-    "Down",
-    "Down-Left",
-    "Up-Left",
-    "Left",
-    "Up-Right",
-    "Up",
-  };
-
 Sensor kSensors[] = {
-  Sensor(A5, "Left"),
-  Sensor(A2, "Down"),
-  Sensor(A7, "Up"), 
-  Sensor(A0, "Right"),
-  Sensor(A4, "Up-Left"),
-  Sensor(A3, "Down-Left"),
-  Sensor(A6, "Up-Right"),
-  Sensor(A1, "Down-Right"),
+  Sensor(A0),
+  Sensor(A1),
+  Sensor(A2), 
+  Sensor(A3)
 };
 const size_t kNumSensors = sizeof(kSensors)/sizeof(Sensor);
 
@@ -696,14 +635,10 @@ class SerialProcessor {
     Serial.print("r");
     for (size_t i = 0; i < kNumSensors; ++i) {
       Serial.print(" ");
-      Serial.print(kSensors[i].GetButtonName());
-      Serial.print(":");
       Serial.print(kSensors[i].GetCurValue());
     }
     for (size_t i = 0; i < kNumButtons; ++i) {
       Serial.print(" ");
-      Serial.print(pinMaps[kButtons[i].GetPin()-7]);
-      Serial.print(":");
       Serial.print(kButtons[i].GetCurValue());
     }
     Serial.print("\n");
@@ -712,9 +647,6 @@ class SerialProcessor {
   void PrintReadableThresholds() {
     Serial.print("h");
     for (size_t i = 0; i < kNumSensors; ++i) {
-      Serial.print(" ");
-      Serial.print(kSensors[i].GetButtonName());
-      Serial.print(":");
       Serial.print(kSensors[i].GetThreshold());
     }
     Serial.print("\n");
@@ -751,6 +683,10 @@ void setup() {
     // Button numbers should start with 1.
     kSensors[i].Init(i + 1);
   }
+  for (size_t i = 0; i < kNumButtons; ++i) {
+    // Button numbers should start after sensors.
+    kButtons[i].Init(i + kNumSensors + 5); // no idea why a smaller offsets is not working. sensors and buttons are overlapping if we do not add 4 here
+  }
   
   #if defined(CLEAR_BIT) && defined(SET_BIT)
 	  // Set the ADC prescaler to 16 for boards that support it,
@@ -760,11 +696,6 @@ void setup() {
 	  CLEAR_BIT(ADCSRA, ADPS1);
 	  CLEAR_BIT(ADCSRA, ADPS0);
   #endif
-
-  for (size_t i = 0; i < kNumButtons; ++i) {
-    // Button numbers should start with 1.
-    kButtons[i].Init(i + 1);
-  }
 }
 
 void loop() {
