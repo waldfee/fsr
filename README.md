@@ -1,3 +1,7 @@
+# waldfee's fork
+
+uses [OhHeyItsAlexis' additions](https://github.com/OhHeyItsAlexis/fsr) for digital buttons (eg start/select), but removes all the changes to the webui since i dont use it.
+
 # Teejusb's FSR Guide
 A complete software package for FSR dance pads.  
 Join the [discord](https://discord.gg/RamvtwuEF2) for any questions/suggestions
